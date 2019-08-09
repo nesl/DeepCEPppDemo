@@ -1,0 +1,9 @@
+openvino_yolov3_test.py - Similar to openVino's Yolo sync wrapper. about 1FPS on MYRIAD
+
+openvino_tiny-yolov3_test.py - Similar to openVino's Yolo sync wrapper. about 4FPS on MYRIAD. Trouble detecting cars
+
+openvino_yolov3_MultiStick_test.py - Better! Async detection. Detection: 2FPS
+
+openvino_tiny-yolov3_MultiStick_test.py - better FPS but does not detect cars that well. 
+
+tiny-Yolo likes pottedPlants
