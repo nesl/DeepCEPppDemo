@@ -1,0 +1,55 @@
+<?xml version="1.0" ?>
+<mapping>
+	<map>
+		<framework name="conv2d/BiasAdd" out_port_id="0"/>
+		<IR id="1" name="conv2d/Conv2D" out_port_id="3"/>
+	</map>
+	<map>
+		<framework name="Reshape/shape" out_port_id="0"/>
+		<IR id="7" name="Reshape/shape/Output_0/Data__const" out_port_id="1"/>
+	</map>
+	<map>
+		<framework name="dense/BiasAdd" out_port_id="0"/>
+		<IR id="9" name="dense/MatMul" out_port_id="3"/>
+	</map>
+	<map>
+		<framework name="Relu_3" out_port_id="0"/>
+		<IR id="4" name="Relu_3" out_port_id="1"/>
+	</map>
+	<map>
+		<framework name="dropout_1/Identity" out_port_id="0"/>
+		<IR id="6" name="max_pooling2d_1/MaxPool/Transpose" out_port_id="1"/>
+	</map>
+	<map>
+		<framework name="max_pooling2d_1/MaxPool" out_port_id="0"/>
+		<IR id="6" name="max_pooling2d_1/MaxPool/Transpose" out_port_id="1"/>
+	</map>
+	<map>
+		<framework name="input" out_port_id="0"/>
+		<IR id="0" name="input" out_port_id="0"/>
+	</map>
+	<map>
+		<framework name="Reshape" out_port_id="0"/>
+		<IR id="8" name="Reshape" out_port_id="2"/>
+	</map>
+	<map>
+		<framework name="dropout_2/Identity" out_port_id="0"/>
+		<IR id="10" name="Relu_4" out_port_id="1"/>
+	</map>
+	<map>
+		<framework name="Relu_4" out_port_id="0"/>
+		<IR id="10" name="Relu_4" out_port_id="1"/>
+	</map>
+	<map>
+		<framework name="Relu" out_port_id="0"/>
+		<IR id="2" name="Relu" out_port_id="1"/>
+	</map>
+	<map>
+		<framework name="conv2d_3/BiasAdd" out_port_id="0"/>
+		<IR id="3" name="conv2d_3/Conv2D" out_port_id="3"/>
+	</map>
+	<map>
+		<framework name="logits_tensor/BiasAdd" out_port_id="0"/>
+		<IR id="11" name="logits_tensor/MatMul" out_port_id="3"/>
+	</map>
+</mapping>
