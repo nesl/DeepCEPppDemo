@@ -21,9 +21,10 @@ import os
 import sys
 from argparse import ArgumentParser, SUPPRESS
 from math import exp as exp
-from time import time
+from time import time, sleep
 
 import cv2
+import numpy as np
 from openvino.inference_engine import IENetwork, IEPlugin
 
 logging.basicConfig(format="[ %(levelname)s ] %(message)s", level=logging.INFO, stream=sys.stdout)
@@ -210,7 +211,36 @@ def main():
     cap = cv2.VideoCapture(input_stream)
     number_input_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     number_input_frames = 1 if number_input_frames != -1 and number_input_frames < 0 else number_input_frames
-
+    
+    cap.set(3, 1280) # Set the resolution width
+    cap.set(4, 720)  # Set the resolution height
+    cap.set(10, 135) # Brightness
+    cap.set(11, 118) # Contrast
+    cap.set(12, 180) # Saturation
+    
+    autoFocus = True
+    cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
+    
+    print("Brightness: ", cap.get(10))
+    print("Contrast: ", cap.get(11))
+    print("Saturation: ", cap.get(12))
+    print("Gain: ", cap.get(14))
+    print("Exposure: ", cap.get(15))
+    print("Focus: ", cap.get(28))
+    """
+    cap.set(3 , 640  ) # width        
+    cap.set(4 , 480  ) # height       
+    cap.set(10, 120  ) # brightness     min: 0   , max: 255 , increment:1, default:128
+    cap.set(11, 50   ) # contrast       min: 0   , max: 255 , increment:1, default:128   
+    cap.set(12, 70   ) # saturation     min: 0   , max: 255 , increment:1, default:128
+    cap.set(13, 13   ) # hue            NOT SUPPORTED 
+    cap.set(14, 50   ) # gain           min: 0   , max: 127 , increment:1, CHANGES AUTOMATICALLY
+    cap.set(15, -3   ) # exposure       min: -7  , max: -1  , increment:1, CHANGES AUTOMATICALLY
+    cap.set(17, 5000 ) # white_balance  min: 4000, max: 7000, increment:1, NOT SUPPORTED 
+    cap.set(28, 0    ) # focus          min: 0   , max: 255 , increment:5, CHANGES AUTOMATICALLY
+    cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)  # Turn autofocus on or off
+    """
+    
     wait_key_code = 1
 
     # Number of frames in picture is 1 and this will be read in cycle. Sync mode is default value for this case
@@ -229,10 +259,13 @@ def main():
     render_time = 0
     parsing_time = 0
     
-    out = cv2.VideoWriter("output.avi", cv2.VideoWriter_fourcc('H','2','6','4'), 10.0, (w, h))
     # ----------------------------------------------- 6. Doing inference -----------------------------------------------
     print("To close the application, press 'CTRL+C' or any key with focus on the output window")
     while cap.isOpened():
+        print("Gain: ", cap.get(14))
+        print("Exposure: ", cap.get(15))
+        print("Focus: ", cap.get(28), end="\n\n")
+        
         # Here is the first asynchronous point: in the Async mode, we capture frame to populate the NEXT infer request
         # in the regular mode, we capture frame to the CURRENT infer request
         if is_async_mode:
@@ -258,30 +291,41 @@ def main():
         start_time = time()
         exec_net.start_async(request_id=request_id, inputs={input_blob: in_frame})
         det_time = time() - start_time
+        #print(det_time, end=",")
 
         # Collecting object detection results
         objects = list()
         if exec_net.requests[cur_request_id].wait(-1) == 0:
             output = exec_net.requests[cur_request_id].outputs
+            
 
             start_time = time()
             for layer_name, out_blob in output.items():
                 layer_params = YoloV3Params(net.layers[layer_name].params, out_blob.shape[2])
-                log.info("Layer {} parameters: ".format(layer_name))
-                layer_params.log_params()
+                if args.raw_output_message:
+                    log.info("Layer {} parameters: ".format(layer_name))
+                    layer_params.log_params()
                 objects += parse_yolo_region(out_blob, in_frame.shape[2:],
                                              frame.shape[:-1], layer_params,
                                              args.prob_threshold)
             parsing_time = time() - start_time
+            #print(parsing_time, end=",")
 
+        start_time = time()
         # Filtering overlapping boxes with respect to the --iou_threshold CLI parameter
+        """
+        objects: List of dicts. [{'confidence', 'class_id', 'xmin', 'ymin', 'ymax', 'xmax'}, .. ]
+        class_id: 2 = car, 7 = truck
+        """
         for i in range(len(objects)):
             if objects[i]['confidence'] == 0:
                 continue
             for j in range(i + 1, len(objects)):
                 if intersection_over_union(objects[i], objects[j]) > args.iou_threshold:
                     objects[j]['confidence'] = 0
-
+                    
+        filter_time = time() - start_time
+        #print(filter_time)
         # Drawing objects with respect to the --prob_threshold CLI parameter
         objects = [obj for obj in objects if obj['confidence'] >= args.prob_threshold]
 
@@ -306,9 +350,34 @@ def main():
                                                                               color))
 
             cv2.rectangle(frame, (obj['xmin'], obj['ymin']), (obj['xmax'], obj['ymax']), color, 2)
+            
+            if det_label == "truck":
+                crop = frame[obj['ymin']:obj['ymax'], obj['xmin']:obj['xmax']].copy()
+                hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+                
+                # Range for lower
+                lower_red = np.array([0,50,20])
+                upper_red = np.array([15,255,255])
+                mask1 = cv2.inRange(hsv, lower_red, upper_red)
+                
+                # Range for upper
+                lower_red = np.array([160,50,20])
+                upper_red = np.array([180,255,255])
+                mask2 = cv2.inRange(hsv,lower_red,upper_red)
+                
+                red_mask = mask1 + mask2
+                #cv2.imshow('red_mask', red_mask)
+                #cv2.waitKey(0)
+                #cv2.destroyAllWindows()
+                ratio = cv2.countNonZero(red_mask)/(crop.size/3)
+                print('Red pixel percentage:', np.round(ratio*100, 2))
+                if ratio >= 0.30:
+                    det_label = "red truck" 
+                
+                
             cv2.putText(frame,
-                        "#" + det_label + ' ' + str(round(obj['confidence'] * 100, 1)) + ' %',
-                        (obj['xmin'], obj['ymin'] - 7), cv2.FONT_HERSHEY_COMPLEX, 0.6, color, 1)
+                "#" + det_label + ' ' + str(round(obj['confidence'] * 100, 1)) + ' %',
+                (obj['xmin'], obj['ymin'] - 7), cv2.FONT_HERSHEY_COMPLEX, 0.6, color, 1)
 
         # Draw performance stats over frame
         inf_time_message = "Inference time: N\A for async mode" if is_async_mode else \
@@ -326,7 +395,7 @@ def main():
 
         start_time = time()
         cv2.imshow("DetectionResults", frame)
-        out.write(frame)
+        
         render_time = time() - start_time
 
         if is_async_mode:
@@ -338,14 +407,42 @@ def main():
         # Tab key
         if key == 27:
             break
+            
         # ESC key
         if key == 9:
             exec_net.requests[cur_request_id].wait()
             is_async_mode = not is_async_mode
             log.info("Switched to {} mode".format("async" if is_async_mode else "sync"))
+        
+        # 'a' Key - Toggle Autofocus
+        if key == 65 or key == 97:
+            if autoFocus:
+                log.info("Autofocus off")
+                cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+                autoFocus = False
+            else:
+                log.info("Autofocus on")
+                cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
+                autoFocus = True
+                
+        # 'f' Key - Set focus to 30 (Good for tablets)
+        if key == 102 or key == 70:
+            cap.set(28, 30)
+            log.info("Set focus to 30")
+            
+        # 's' Key - Decrement focus by 5
+        if (key == 83 or key == 115) and cap.get(28) - 5 >= 0:
+            cap.set(28, cap.get(28) - 5)
+            log.info("Set focus to {}".format(cap.get(28)))
+            
+        # 'd' Key - Increment focus by 5
+        if (key == 68 or key == 100) and cap.get(28) + 5 <= 255:
+            cap.set(28, cap.get(28) + 5)
+            log.info("Set focus to {}".format(cap.get(28)))
+            
+            
     
     cap.release()
-    out.release()
     cv2.destroyAllWindows()
 
 
