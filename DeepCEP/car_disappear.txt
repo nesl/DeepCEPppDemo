@@ -1,0 +1,6 @@
+SEQ: {e1:car e2:none}
+Constraints:{
+    e1.t < e2.t
+    e1.sid = e2.sid
+}
+TIME:60
