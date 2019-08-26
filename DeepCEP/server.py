@@ -11,6 +11,7 @@ from src.cep_definition import *
 from src.cep_es_stack import *
 from src.cep_FSM import *
 from src.cep_utils import *
+from src.cep_selector import *
 
 def socket_service():
     try:
@@ -25,8 +26,8 @@ def socket_service():
     print ('Waiting connection...')
 
     ## read in CEP query and create CEP model
-    print ('Reading Complex Event definition...')
-    ce_path = 'car_disappear.txt'
+    ce_path = 'coordinated_attack.txt'
+    print ('Reading Complex Event definition from: ', ce_path)
     ce_def = read_ce_def(ce_path)
     combine_format, events, constraints, time_win = ce_def_parsing(ce_def)
     
@@ -52,7 +53,7 @@ def socket_service():
 
         
     print('Sequence flag: ', seq_flag)
-    print('\nProbLog model: \n')
+    print('\n============ProbLog model: ============\n')
     print(pattern_detect_model)
     
     ## create event dictionary based on the order of unique events
@@ -65,6 +66,7 @@ def socket_service():
     ## stact update rule is associated with stack 
     stored_e_num = 10
     event_stack = create_event_stack(state_num, stored_e_num)
+    print('\n====================================\n')
     print('event_stack_shape: ',event_stack.shape)
     print(event_stack)
     
@@ -79,7 +81,7 @@ def socket_service():
                                    state_info, event_info,
                                    stored_e_num,
                                    event_stack,
-                                  seq_flag))
+                                   seq_flag))
         t.start()
 
         
@@ -90,7 +92,7 @@ def deal_data(conn, addr,
               state_info, event_info,
               stored_e_num,
               event_stack,
-             seq_flag):
+              seq_flag):
     
     print ('Accept new connection from {0}'.format(addr) )
     # send welcome msg to the client side.
@@ -149,7 +151,35 @@ def deal_data(conn, addr,
                 for path_i_idx_i in path_i:
                     print(ce_buffer[int(path_i_idx_i-1)])
                     
-        ######################### add selector model here ####################
+                ############ add selector model here ######
+                path_i_events = [ce_buffer[int(i-1)] for i in path_i]
+                ce_event_flag = Selector(path_i_events, diagnose = 0)
+#                 ce_event_flag = 1
+
+                # print( ce_event_flag)
+                if ce_event_flag == 1:
+                    print("========Complex Event detected!========")
+                    print("=========== Event: Coordinated Attack ==========")
+                    print("Event \t\t Time ")
+                    print(ce_buffer[int(path_i[0]-1)][0], "\t\t", ce_buffer[int(path_i[0]-1)][2])
+                    print(ce_buffer[int(path_i[1]-1)][0], "\t\t", ce_buffer[int(path_i[1]-1)][2])
+                    print(ce_buffer[int(path_i[2]-1)][0], "\t\t", ce_buffer[int(path_i[2]-1)][2])
+#                     print("Time\t %.2f \t %.2f \t %.2f "\
+#                           %(ce_buffer[int(path_i[0]-1)][2],
+#                             ce_buffer[int(path_i[1]-1)][2],
+#                             ce_buffer[int(path_i[2]-1)][2]))
+#                     print("Event\t %s \t %s \t %s \t "\
+#                           %(ce_buffer[int(path_i[0]-1)][0],
+#                             ce_buffer[int(path_i[1]-1)][0],
+#                             ce_buffer[int(path_i[2]-1)][0])
+#                          )
+
+#                     print("Time: %2f, %2f, %2f." 
+#                           %(event_time[0], event_time[1], event_time[2]))
+    #                         print("Subject ID: %d" %event_value[0])
+                    print("=======================================\n")
+                    
+                    
         
         
         
@@ -208,7 +238,7 @@ def deal_data(conn, addr,
 
     # closing connection.
         #time.sleep(1)
-        if data == 'exit' or not data:
+        if data[0] == 'exit' or not data:
             print ('{0} connection close'.format(addr) )
             conn.send('Connection closed!'.encode())
             break
@@ -222,7 +252,7 @@ if __name__ == '__main__':
     
     
     
-from cep import *
-ce_path = 'car_disappear.txt'
-ce_def = read_ce_def(ce_path)
-ce_def_parsing(ce_def)
+# from cep import *
+# ce_path = 'car_disappear.txt'
+# ce_def = read_ce_def(ce_path)
+# ce_def_parsing(ce_def)

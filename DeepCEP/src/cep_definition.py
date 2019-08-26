@@ -38,7 +38,7 @@ def ce_def_parsing(ce_def):
                             +pp.Word('>'+'<'+'='+'>='+'<=')
                             +pp.Word(pp.alphanums+'.') )
 
-    ConstraintList = pp.OneOrMore( constraint_element )
+    ConstraintList = pp.ZeroOrMore( constraint_element )  #possible to have no constraints
 
 
     constraint = (pp.Word('Constraints') 

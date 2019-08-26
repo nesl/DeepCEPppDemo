@@ -1,0 +1,6 @@
+PATTERN: {e1:fight e2:gunshot e3:red_truck}
+Constraints:{
+    e2.t -e1.t < 10
+    e3.t -e2.t < 20
+}
+TIME:60

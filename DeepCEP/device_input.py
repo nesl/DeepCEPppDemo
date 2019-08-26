@@ -50,7 +50,8 @@ def socket_client(test_mode = 0):
             event_sid = 0
 #             camera_img = get_img(event_time)
 #             event_obj = object_detector(camera_img, yolo, all_classes)
-            event_obj = 'test'
+            print("Generating event: ")
+            event_obj = input()
 
             event = [event_obj, event_sid, event_time]
             
