@@ -1,4 +1,4 @@
-PATTERN: {e1:fight e2:gunshot e3:red_truck}
+PATTERN: {e1:fight e2:gunshot e3:convoy}
 Constraints:{
 }
 TIME:60

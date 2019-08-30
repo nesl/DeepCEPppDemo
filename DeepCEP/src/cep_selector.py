@@ -9,16 +9,29 @@ output: the probability of this event seqence being a Complex Event
 """
 
 # def Selector(event_time, event_value, diagnose = 0):
-def Selector(path_i_events, diagnose = 0):
-    # selector model for hard-coded coordinated attack
-    constriant1 = ( path_i_events[1][2] - path_i_events[0][2]<= 10 )
-    constriant2 = ( path_i_events[2][2] - path_i_events[1][2]<= 20 )
+def Selector(path_i_events, ce, diagnose = 0):
     
-    
-    ce_event = constriant1 and constriant2
-    
-    
-    
+    if ce == 'coordinated_attack':
+        # selector model for hard-coded coordinated attack
+        constriant1 = ( path_i_events[1][2] - path_i_events[0][2]<= 100 )
+        constriant2 = ( path_i_events[2][2] - path_i_events[1][2]<= 200 )
+        ce_event = constriant1 and constriant2
+    elif ce == 'convoy':
+        # time
+        constriant1 = ( path_i_events[1][2] - path_i_events[0][2]<= 100 )
+        constriant2 = ( path_i_events[3][2] - path_i_events[2][2]<= 100 )
+        constriant3 = ( path_i_events[2][2] - path_i_events[1][2]<= 200 )
+        # location
+        constriant4 = ( path_i_events[0][1] == 'CAM1' )
+        constriant5 = ( path_i_events[1][1] == 'CAM1' )
+        constriant6 = ( path_i_events[2][1] == 'CAM2' )
+        constriant7 = ( path_i_events[3][1] == 'CAM2' )
+        ce_event = constriant1 and constriant2 and constriant3 and constriant4 and constriant5 and constriant6 and constriant7
+
+        
+        
+        
+        
 #     # definition of Selector model
 #     selector_model = """
 #     event(a, a_time, a_value).
@@ -65,5 +78,5 @@ def Selector(path_i_events, diagnose = 0):
 #         print('Satisfied(time/value): \t',condition_satisfy,
 #               '\nComplexEvent: \t',ce_event)
 #         print('\n')
-        
+
     return ce_event

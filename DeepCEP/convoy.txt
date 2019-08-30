@@ -1,0 +1,4 @@
+PATTERN: {e1:red_truck e2:red_truck e3:red_truck e4:red_truck}
+Constraints:{
+}
+TIME:60

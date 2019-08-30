@@ -1,0 +1,18 @@
+PATTERN: {e1:fight e2:gunshot e3:convoy}
+Constraints:{
+    e2.t -e1.t < 10
+    e3.t -e2.t < 20
+}
+TIME:60
+
+
+CE: convoy heading to town
+PATTERN: {e1:red_truck e2:red_truck e3:red_truck e4:red_truck}
+Constraints:{
+    e2.t - e1.t < 3
+    e3.t - e2.t < 10
+    e4.t - e3.t < 3
+    e1.sid = e2.sid = 1
+    e3.sid = e4.sid = 2
+}
+TIME:60
