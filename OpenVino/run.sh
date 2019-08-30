@@ -1,0 +1,1 @@
+python3 object_detection_demo_yolov3_async.py --labels coco.names -m models/yolov3.xml -d MYRIAD -i $1 -t $2
