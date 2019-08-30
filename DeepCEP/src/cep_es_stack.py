@@ -67,7 +67,8 @@ def update_stack(event_stack, seq_flag = False):
 
 def states_update(pattern_detect_model, state_info, org_uniq_event, 
                   current_states, current_event, 
-                  seq_flag = False, overlap_flag = True):
+                  seq_flag = False, overlap_flag = True,
+                  diagnose = False):
     """
     use defined fsm_model to propagate the states set
     state_num: is a global variable defined in main program
@@ -102,6 +103,7 @@ def states_update(pattern_detect_model, state_info, org_uniq_event,
         if current_states[i]!=0:
             current_state =  one_hot_id(state_num, i)  # convert state index into one-hot
             
+#             print(state_info, org_uniq_event, current_state, current_event)
             next_state = FSM_core(pattern_detect_model, state_info, org_uniq_event, 
                                current_state, current_event,
                                diagnose = 0)
@@ -140,9 +142,10 @@ def states_update(pattern_detect_model, state_info, org_uniq_event,
             for i in range(1, state_num-1):
                 new_states[i] = 0
 
-    print("Current_states: ", current_states, 
-          "\nCurrent_event: ", current_event, 
-          "\nNew_states: ", new_states)
+    if diagnose:
+        print("Current_states: ", current_states, 
+              "\nCurrent_event: ", current_event, 
+              "\nNew_states: ", new_states)
     
     return new_states
 
