@@ -8,6 +8,7 @@ Runs the model on a recording to detect gunshots
 import pickle
 import os
 import librosa
+from prettytable import PrettyTable
 from time import time
 from record import record_to_file
 
@@ -25,6 +26,18 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 total_start_time = time()
 model_filepath = 'pb_model.pb'
+labels = [
+            'air_conditioner',
+            'car_horn',
+            'children_playing',
+            'dog_bark',
+            'drilling',
+            'engine_idling',
+            'gun_shot',
+            'jackhammer',
+            'siren',
+            'street_music'
+        ]
 #print(model_filepath)
 
 
@@ -133,29 +146,10 @@ def data_processing(work_dir):
     return test_x, test_y
 
 
-print("Recording...")
-record_start = time()
-record_to_file("sound/input.wav")
-record_time = time() - record_start 
-
-work_dir = 'sound'
-start_time = time()
-test_x, test_y = data_processing(work_dir)
-load_time = time() - start_time
-
-
-
-# # Testing on loaded model
-start_time = time()
-
-output = sess.run(output_tensor, feed_dict =  {model_input:  test_x })
-
 
 def predict_label(logits_output):
     predict_y = np.argmax(logits_output, axis = 1)
     return predict_y
-
-
 
 def exp_evidence(logits): 
     return np.exp(np.clip(logits,-10,10))
@@ -167,19 +161,51 @@ def uncertainty_score( logits_output ):
     return u_score
 
 
-y_pred = predict_label(output)
-uncertainty_y_list = uncertainty_score(output)
-test_time = time() - start_time
-print("Inference time:", infer_time)
-print("Load time:", load_time)
-print("Test time:", test_time)
-print("Total time:", time() - total_start_time - record_time)
+
+while True:
+    print("Recording...")
+    record_start = time()
+    record_to_file("sound/input.wav")
+    record_time = time() - record_start 
+
+    work_dir = 'sound'
+    start_time = time()
+    test_x, test_y = data_processing(work_dir)
+    load_time = time() - start_time
 
 
-print('True \t Predict \t Uncertainty \t Match')
-for i in range(y_pred.shape[0]):
-    if np.argmax(test_y[i]) != y_pred[i]:
-        print(np.argmax(test_y[i]), ' \t', y_pred[i], '\t\t ', uncertainty_y_list[i], '    !!!')
+    # # Testing on loaded model
+    start_time = time()
+    output = sess.run(output_tensor, feed_dict =  {model_input:  test_x })
+
+
+    y_pred = predict_label(output)
+    uncertainty_y_list = uncertainty_score(output)
+    test_time = time() - start_time
+    print("Inference time:", infer_time)
+    print("Load time:", load_time)
+    print("Test time:", test_time)
+    print("Total time:", time() - total_start_time - record_time)
+
+    
+    t = PrettyTable(['True', 'Predict', 'Uncertainty', 'Match'])
+    for i in range(y_pred.shape[0]):
+        if np.argmax(test_y[i]) != y_pred[i]:
+            t.add_row([labels[np.argmax(test_y[i])], labels[y_pred[i]], uncertainty_y_list[i], '!!!'])
+        else:
+            t.add_row([labels[np.argmax(test_y[i])], labels[y_pred[i]], uncertainty_y_list[i], ''])
+    print(t)
+    
+    print("This sound is:", labels[np.argmax(np.bincount(y_pred))])
+    
+    
+    ans = input("Press enter to continue, q & enter to quit: ")
+    ans = ans.lower()
+    print('\n')
+    if ans == 'q':
+        exit(0)
     else:
-        print(np.argmax(test_y[i]), ' \t', y_pred[i], '\t\t ', uncertainty_y_list[i])
+        infer_time = 0
+        total_start_time = time()
+        continue
 
