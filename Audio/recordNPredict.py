@@ -8,9 +8,14 @@ Runs the model on a recording to detect gunshots
 import pickle
 import os
 import librosa
+import sys
+sys.path.append("/home/pi/Desktop/yolov3")
 from prettytable import PrettyTable
-from time import time
+from time import time, sleep
 from record import record_to_file
+from pub import setup, print_and_pub
+from syncClock import now
+
 
 
 # Hide Warnings
@@ -40,6 +45,12 @@ labels = [
         ]
 #print(model_filepath)
 
+# Connect to pub server
+publisher = setup()
+
+# Run syncClock
+print("Syncing with time server..")
+now()
 
 
 '''
@@ -56,8 +67,6 @@ with tf.gfile.GFile(model_filepath, 'rb') as f:
 
 #print('Check out the input placeholders:')
 nodes = [n.name + ' => ' +  n.op for n in graph_def.node if n.op in ('Placeholder')]
-#for node in nodes:
-    #print(node)
 
 # Define input tensor
 model_input = tf.placeholder(tf.float32, shape=[None,40,40,3], name = 'input')
@@ -163,7 +172,7 @@ def uncertainty_score( logits_output ):
 
 
 while True:
-    print("Recording...")
+    print("Listening...")
     record_start = time()
     record_to_file("sound/input.wav")
     record_time = time() - record_start 
@@ -188,24 +197,34 @@ while True:
     print("Total time:", time() - total_start_time - record_time)
 
     
-    t = PrettyTable(['True', 'Predict', 'Uncertainty', 'Match'])
+    t = PrettyTable(['Predict', 'Uncertainty'])
     for i in range(y_pred.shape[0]):
-        if np.argmax(test_y[i]) != y_pred[i]:
-            t.add_row([labels[np.argmax(test_y[i])], labels[y_pred[i]], uncertainty_y_list[i], '!!!'])
-        else:
-            t.add_row([labels[np.argmax(test_y[i])], labels[y_pred[i]], uncertainty_y_list[i], ''])
+        t.add_row([labels[y_pred[i]], uncertainty_y_list[i][0]])
     print(t)
     
-    print("This sound is:", labels[np.argmax(np.bincount(y_pred))])
-    
-    
-    ans = input("Press enter to continue, q & enter to quit: ")
-    ans = ans.lower()
-    print('\n')
-    if ans == 'q':
-        exit(0)
+    if len(y_pred) == 2:
+        name = labels[y_pred[0]] if uncertainty_y_list[0][0] < uncertainty_y_list[1][0] else labels[y_pred[1]]
     else:
-        infer_time = 0
-        total_start_time = time()
-        continue
+        name = labels[np.argmax(np.bincount(y_pred))]
+    total_uncertainty = 1
+    for i in range(y_pred.shape[0]):
+        if name == labels[y_pred[i]]:
+            total_uncertainty *= uncertainty_y_list[i][0]
+            
+    print("This sound is:", name)
+    print_and_pub(publisher, "AUDIO", [name, "AUDIO", now(), round(total_uncertainty, 3)])
+    
+    print("\n")
+    infer_time = 0
+    total_start_time = time()
+    
+    #ans = input("Press enter to continue, q & enter to quit: ")
+    #ans = ans.lower()
+    #print('\n')
+    #if ans == 'q':
+        #exit(0)
+    #else:
+        #infer_time = 0
+        #total_start_time = time()
+        #continue
 

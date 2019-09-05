@@ -32,8 +32,8 @@ def ignore_stderr():
     
     
     
-THRESHOLD = 300
-CHUNK_SIZE = 512
+THRESHOLD = 325
+CHUNK_SIZE = 1024
 FORMAT = pyaudio.paInt16
 RATE = 44100
 
@@ -105,7 +105,7 @@ def record():
 
     while 1:
         # little endian, signed short
-        snd_data = array('h', stream.read(CHUNK_SIZE))
+        snd_data = array('h', stream.read(CHUNK_SIZE, exception_on_overflow = False))
         if byteorder == 'big':
             snd_data.byteswap()
         r.extend(snd_data)
@@ -117,7 +117,7 @@ def record():
         elif not silent and not snd_started:
             snd_started = True
 
-        if snd_started and num_silent > 30:
+        if snd_started and num_silent > 15:
             break
 
     sample_width = p.get_sample_size(FORMAT)

@@ -27,7 +27,7 @@ import cv2
 import numpy as np
 from openvino.inference_engine import IENetwork, IEPlugin
 from pub import setup, print_and_pub
-
+from syncClock import now
 
 
 
@@ -170,8 +170,13 @@ def main():
     model_xml = args.model
     model_bin = os.path.splitext(model_xml)[0] + ".bin"
     
-    # ------------- 0. Setting up pub/sub -------------
+    # ------------- 0. Setting up pub/sub and GoodClock -------------
+    # Connect to pub server
     publisher = setup()
+
+    # Run syncClock
+    print("Syncing with time server..")
+    now()
 
 
     # ------------- 1. Plugin initialization for specified device and load extensions library if specified -------------
@@ -276,11 +281,13 @@ def main():
     showVideoFeed = True
     showCameraInfo = True
     showTimes = False
+    runYOLO = True
     while cap.isOpened():
         if showCameraInfo:
             print("Gain: ", cap.get(14))
             print("Exposure: ", cap.get(15))
             print("Focus: ", cap.get(28))
+        
         
         # Here is the first asynchronous point: in the Async mode, we capture frame to populate the NEXT infer request
         # in the regular mode, we capture frame to the CURRENT infer request
@@ -299,126 +306,130 @@ def main():
             request_id = cur_request_id
             in_frame = cv2.resize(frame, (w, h))
 
-        # resize input_frame to network size
-        in_frame = in_frame.transpose((2, 0, 1))  # Change data layout from HWC to CHW
-        in_frame = in_frame.reshape((n, c, h, w))
+        if runYOLO:
+            # resize input_frame to network size
+            in_frame = in_frame.transpose((2, 0, 1))  # Change data layout from HWC to CHW
+            in_frame = in_frame.reshape((n, c, h, w))
 
-        # Start inference
-        start_time = time()
-        exec_net.start_async(request_id=request_id, inputs={input_blob: in_frame})
-        det_time = time() - start_time
-        #print(det_time, end=",")
+            # Start inference
+            start_time = time()
+            exec_net.start_async(request_id=request_id, inputs={input_blob: in_frame})
+            det_time = time() - start_time
+            #print(det_time, end=",")
 
-        # Collecting object detection results
-        objects = list()
-        if exec_net.requests[cur_request_id].wait(-1) == 0:
-            output = exec_net.requests[cur_request_id].outputs
-            
+            # Collecting object detection results
+            objects = list()
+            if exec_net.requests[cur_request_id].wait(-1) == 0:
+                output = exec_net.requests[cur_request_id].outputs
+                
+
+                start_time = time()
+                for layer_name, out_blob in output.items():
+                    layer_params = YoloV3Params(net.layers[layer_name].params, out_blob.shape[2])
+                    if args.raw_output_message:
+                        log.info("Layer {} parameters: ".format(layer_name))
+                        layer_params.log_params()
+                    objects += parse_yolo_region(out_blob, in_frame.shape[2:],
+                                                 frame.shape[:-1], layer_params,
+                                                 args.prob_threshold)
+                parsing_time = time() - start_time
+                #print(parsing_time, end=",")
 
             start_time = time()
-            for layer_name, out_blob in output.items():
-                layer_params = YoloV3Params(net.layers[layer_name].params, out_blob.shape[2])
+            # Filtering overlapping boxes with respect to the --iou_threshold CLI parameter
+            """
+            objects: List of dicts. [{'confidence', 'class_id', 'xmin', 'ymin', 'ymax', 'xmax'}, .. ]
+            class_id: 2 = car, 7 = truck
+            """
+            for i in range(len(objects)):
+                if objects[i]['confidence'] == 0:
+                    continue
+                for j in range(i + 1, len(objects)):
+                    if intersection_over_union(objects[i], objects[j]) > args.iou_threshold:
+                        objects[j]['confidence'] = 0
+                        
+            filter_time = time() - start_time
+            #print(filter_time)
+            # Drawing objects with respect to the --prob_threshold CLI parameter
+            objects = [obj for obj in objects if obj['confidence'] >= args.prob_threshold]
+
+            if len(objects) and args.raw_output_message:
+                log.info("\nDetected boxes for batch {}:".format(1))
+                log.info(" Class ID | Confidence | XMIN | YMIN | XMAX | YMAX | COLOR ")
+
+            origin_im_size = frame.shape[:-1]
+            for obj in objects:
+                # Validation bbox of detected object
+                if obj['xmax'] > origin_im_size[1] or obj['ymax'] > origin_im_size[0] or obj['xmin'] < 0 or obj['ymin'] < 0:
+                    continue
+                color = (int(min(obj['class_id'] * 12.5, 255)),
+                         min(obj['class_id'] * 7, 255), min(obj['class_id'] * 5, 255))
+                det_label = labels_map[obj['class_id']] if labels_map and len(labels_map) >= obj['class_id'] else \
+                    str(obj['class_id'])
+
                 if args.raw_output_message:
-                    log.info("Layer {} parameters: ".format(layer_name))
-                    layer_params.log_params()
-                objects += parse_yolo_region(out_blob, in_frame.shape[2:],
-                                             frame.shape[:-1], layer_params,
-                                             args.prob_threshold)
-            parsing_time = time() - start_time
-            #print(parsing_time, end=",")
-
-        start_time = time()
-        # Filtering overlapping boxes with respect to the --iou_threshold CLI parameter
-        """
-        objects: List of dicts. [{'confidence', 'class_id', 'xmin', 'ymin', 'ymax', 'xmax'}, .. ]
-        class_id: 2 = car, 7 = truck
-        """
-        for i in range(len(objects)):
-            if objects[i]['confidence'] == 0:
-                continue
-            for j in range(i + 1, len(objects)):
-                if intersection_over_union(objects[i], objects[j]) > args.iou_threshold:
-                    objects[j]['confidence'] = 0
+                    log.info(
+                        "{:^9} | {:10f} | {:4} | {:4} | {:4} | {:4} | {} ".format(det_label, obj['confidence'], obj['xmin'],
+                                                                                  obj['ymin'], obj['xmax'], obj['ymax'],
+                                                                                  color))           
+                
+                # Check for Red Truck
+                if det_label == "truck":
+                    crop = frame[obj['ymin']:obj['ymax'], obj['xmin']:obj['xmax']].copy()
+                    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
                     
-        filter_time = time() - start_time
-        #print(filter_time)
-        # Drawing objects with respect to the --prob_threshold CLI parameter
-        objects = [obj for obj in objects if obj['confidence'] >= args.prob_threshold]
-
-        if len(objects) and args.raw_output_message:
-            log.info("\nDetected boxes for batch {}:".format(1))
-            log.info(" Class ID | Confidence | XMIN | YMIN | XMAX | YMAX | COLOR ")
-
-        origin_im_size = frame.shape[:-1]
-        for obj in objects:
-            # Validation bbox of detected object
-            if obj['xmax'] > origin_im_size[1] or obj['ymax'] > origin_im_size[0] or obj['xmin'] < 0 or obj['ymin'] < 0:
-                continue
-            color = (int(min(obj['class_id'] * 12.5, 255)),
-                     min(obj['class_id'] * 7, 255), min(obj['class_id'] * 5, 255))
-            det_label = labels_map[obj['class_id']] if labels_map and len(labels_map) >= obj['class_id'] else \
-                str(obj['class_id'])
-
-            if args.raw_output_message:
-                log.info(
-                    "{:^9} | {:10f} | {:4} | {:4} | {:4} | {:4} | {} ".format(det_label, obj['confidence'], obj['xmin'],
-                                                                              obj['ymin'], obj['xmax'], obj['ymax'],
-                                                                              color))           
+                    # Range for lower
+                    lower_red = np.array([0,50,20])
+                    upper_red = np.array([15,255,255])
+                    mask1 = cv2.inRange(hsv, lower_red, upper_red)
+                    
+                    # Range for upper
+                    lower_red = np.array([160,50,20])
+                    upper_red = np.array([180,255,255])
+                    mask2 = cv2.inRange(hsv,lower_red,upper_red)
+                    
+                    red_mask = mask1 + mask2
+                    #cv2.imshow('red_mask', red_mask)
+                    #cv2.waitKey(0)
+                    #cv2.destroyAllWindows()
+                    ratio = cv2.countNonZero(red_mask)/(crop.size/3)
+                    print('Red pixel percentage:', np.round(ratio*100, 2))
+                    if ratio >= 0.13:
+                        det_label = "red_truck" 
+                    
+                if showVideoFeed:
+                    cv2.rectangle(frame, (obj['xmin'], obj['ymin']), (obj['xmax'], obj['ymax']), color, 2)
+                        
+                    cv2.putText(frame,
+                        "#" + det_label + ' ' + str(round(obj['confidence'] * 100, 1)) + ' %',
+                        (obj['xmin'], obj['ymin'] - 7), cv2.FONT_HERSHEY_COMPLEX, 0.6, color, 1)
+                    
+                print_and_pub(publisher, "CAM1", [det_label, "CAM1", now(), round(obj['confidence'], 3)])
+                
             
-            # Check for Red Truck
-            if det_label == "truck":
-                crop = frame[obj['ymin']:obj['ymax'], obj['xmin']:obj['xmax']].copy()
-                hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-                
-                # Range for lower
-                lower_red = np.array([0,50,20])
-                upper_red = np.array([15,255,255])
-                mask1 = cv2.inRange(hsv, lower_red, upper_red)
-                
-                # Range for upper
-                lower_red = np.array([160,50,20])
-                upper_red = np.array([180,255,255])
-                mask2 = cv2.inRange(hsv,lower_red,upper_red)
-                
-                red_mask = mask1 + mask2
-                #cv2.imshow('red_mask', red_mask)
-                #cv2.waitKey(0)
-                #cv2.destroyAllWindows()
-                ratio = cv2.countNonZero(red_mask)/(crop.size/3)
-                print('Red pixel percentage:', np.round(ratio*100, 2))
-                if ratio >= 0.30:
-                    det_label = "red truck" 
-                
+            key = -1
             if showVideoFeed:
-                cv2.rectangle(frame, (obj['xmin'], obj['ymin']), (obj['xmax'], obj['ymax']), color, 2)
-                    
-                cv2.putText(frame,
-                    "#" + det_label + ' ' + str(round(obj['confidence'] * 100, 1)) + ' %',
-                    (obj['xmin'], obj['ymin'] - 7), cv2.FONT_HERSHEY_COMPLEX, 0.6, color, 1)
+                # Draw performance stats over frame
+                inf_time_message = "Inference time: N\A for async mode" if is_async_mode else \
+                    "Inference time: {:.3f} ms".format(det_time * 1e3)
+                render_time_message = "OpenCV rendering time: {:.3f} ms".format(render_time * 1e3)
+                async_mode_message = "Async mode is on. Processing request {}".format(cur_request_id) if is_async_mode else \
+                    "Async mode is off. Processing request {}".format(cur_request_id)
+                parsing_message = "YOLO parsing time is {:.3f}".format(parsing_time * 1e3)
+
+                cv2.putText(frame, inf_time_message, (15, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (200, 10, 10), 1)
+                cv2.putText(frame, render_time_message, (15, 45), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
+                cv2.putText(frame, async_mode_message, (10, int(origin_im_size[0] - 20)), cv2.FONT_HERSHEY_COMPLEX, 0.5,
+                            (10, 10, 200), 1)
+                cv2.putText(frame, parsing_message, (15, 30), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
+
+                start_time = time()
+                cv2.imshow("DetectionResults", frame)
+                render_time = time() - start_time
                 
-            print_and_pub(publisher, "", [det_label, 1, time(), round(obj['confidence'], 3)])
-            
-        
-        key = -1
-        if showVideoFeed:
-            # Draw performance stats over frame
-            inf_time_message = "Inference time: N\A for async mode" if is_async_mode else \
-                "Inference time: {:.3f} ms".format(det_time * 1e3)
-            render_time_message = "OpenCV rendering time: {:.3f} ms".format(render_time * 1e3)
-            async_mode_message = "Async mode is on. Processing request {}".format(cur_request_id) if is_async_mode else \
-                "Async mode is off. Processing request {}".format(cur_request_id)
-            parsing_message = "YOLO parsing time is {:.3f}".format(parsing_time * 1e3)
-
-            cv2.putText(frame, inf_time_message, (15, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (200, 10, 10), 1)
-            cv2.putText(frame, render_time_message, (15, 45), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
-            cv2.putText(frame, async_mode_message, (10, int(origin_im_size[0] - 20)), cv2.FONT_HERSHEY_COMPLEX, 0.5,
-                        (10, 10, 200), 1)
-            cv2.putText(frame, parsing_message, (15, 30), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
-
-            start_time = time()
+        elif showVideoFeed:
             cv2.imshow("DetectionResults", frame)
-            
-            render_time = time() - start_time
+
 
         if is_async_mode:
             cur_request_id, next_request_id = next_request_id, cur_request_id
@@ -473,7 +484,7 @@ def main():
             log.info("Set focus to {}".format(cap.get(28)))
         
         # 'c' Key - Closes the live view, CANNOT BE TURNED BACK ON
-        if key == 67 or key == 99:
+        if (key == 67 or key == 99) and runYOLO:
             log.info("Closing the live view")
             cv2.destroyAllWindows()
             render_time = 0
@@ -496,6 +507,15 @@ def main():
             else:
                 log.info("Showing times")
                 showTimes = True
+        
+        # 'n' Key - Toggle YOLO
+        if key == 78 or key == 110:
+            if runYOLO:
+                log.info("Stopping YOLOv3")
+                runYOLO = False
+            else:
+                log.info("Running YOLOv3")
+                runYOLO = True
             
             
     

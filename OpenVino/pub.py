@@ -1,19 +1,16 @@
 
 import time
 import zmq
+import pickle
 from pprint import pprint
 
 
-PUB_IP = "192.168.8.212"
-CAM_NAME = "CAM1"
-
-PUB_URL = "tcp://" + PUB_IP + ":9999"
+PUB_IP = "192.168.8.224"
+PUB_URL = "tcp://" + PUB_IP + ":1111"
 
 
 # Sends topic and body to publisher
 def print_and_pub(publisher, topic, body):
-    
-    topic = CAM_NAME
 
     if type(topic) is str:
         btopic = topic.encode('utf-8')
@@ -21,16 +18,15 @@ def print_and_pub(publisher, topic, body):
         btopic = topic
         topic = topic.decode('utf-8')
 
+
     if type(body) is str:
         bbody = body.encode('utf-8')
     elif type(body) is list:
-        string = ""
-        for i in body:
-            string += str(i) + " "
-        bbody = string.encode('utf-8')
+        bbody = pickle.dumps(body)
     else:
         bbody = body
         body = body.decode('utf-8')
+
 
     publisher.send_multipart([btopic, bbody])
     print("[%s] %s" % (topic, body))
