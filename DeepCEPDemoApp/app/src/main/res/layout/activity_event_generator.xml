@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#2D68C4"
+    android:orientation="vertical"
+    tools:context="com.halilibo.sample.EventGenerator">
+
+    <Button
+        android:id="@+id/cam1_convoy_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Generate Convoy (Cam 1)"
+        android:textAlignment="center" />
+
+
+    <Button
+        android:id="@+id/cam2_convoy_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Generate Convoy (Cam 2)"
+        android:textAlignment="center" />
+
+    <Button
+        android:id="@+id/audio_gunshot_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Generate Gunshot"
+        android:textAlignment="center" />
+
+</LinearLayout>
