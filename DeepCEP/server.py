@@ -399,7 +399,7 @@ def deepcep_server(proxy_URL, ce, sending_CE=False, diagnose = False):
 
     ## create run-time event stack
     ## stact update rule is associated with stack 
-    stored_e_num = 10
+    stored_e_num = 1000
     event_stack = create_event_stack(state_num, stored_e_num)
     if diagnose: 
         print('\n============Initial Event Stack==============\n')

@@ -6,9 +6,9 @@ from pprint import pprint
 import random
 import pickle
 
+# PUB_IP = "127.0.0.1"
+PUB_IP = "192.168.8.224"
 
-# PUB_IP = "192.168.8.212"
-PUB_IP = "127.0.0.1"
 # CAM_NAME = "AUDIO"
 
 PUB_URL = "tcp://" + PUB_IP + ":1111"
