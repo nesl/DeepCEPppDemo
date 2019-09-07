@@ -201,9 +201,6 @@ class FullscreenActivity : AppCompatActivity(),GoogleApiClient.ConnectionCallbac
                     mBetterVideoPlayer.setAutoPlay(true)
                     mBetterVideoPlayer.setLoop(true)
                     eventPlaying = false
-                    if(mGoogleApiClient != null && mGoogleApiClient!!.isConnected()) {
-                        publish()
-                    }
 
                 }else
                 {
@@ -236,6 +233,12 @@ class FullscreenActivity : AppCompatActivity(),GoogleApiClient.ConnectionCallbac
                     startEvent = true
                 }else if (DeviceMessage.fromNearbyMessage(message).getMBody().equals(RESET_MESSAGE) && sensorID == SENSOR_ID.CAM2){
                     reset = true
+                }
+
+                if(startEvent){
+                    if(mGoogleApiClient != null && mGoogleApiClient!!.isConnected()) {
+                        publish()
+                    }
                 }
 
                 // Called when a new message is found.
@@ -327,7 +330,7 @@ class FullscreenActivity : AppCompatActivity(),GoogleApiClient.ConnectionCallbac
 
         public const val TAG = "FullScreenActivity"
 
-        private val TTL_IN_SECONDS = 3 * 60 // Three minutes.
+        private val TTL_IN_SECONDS = 24 * 60 * 60 // One day.
 
         // Key used in writing to and reading from SharedPreferences.
         private val KEY_UUID = "key_uuid"

@@ -6,6 +6,7 @@ import com.google.android.material.snackbar.Snackbar
 import android.text.TextUtils
 import android.util.Log
 import android.view.View
+import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.GoogleApiClient
@@ -106,6 +107,26 @@ class EventGenerator : FragmentActivity(), GoogleApiClient.ConnectionCallbacks, 
             }
 
         }
+
+
+        mMessageListener = object : MessageListener() {
+
+            override fun onFound(message: Message) {
+                var t = Toast.makeText(this@EventGenerator, "GOTEM: " + DeviceMessage.fromNearbyMessage(message).getMBody(), Toast.LENGTH_LONG)
+                t.show()
+
+                if(DeviceMessage.fromNearbyMessage(message).getMBody().equals(CAM1_FINISH_MESSAGE) || DeviceMessage.fromNearbyMessage(message).getMBody().equals(CAM2_FINISH_MESSAGE) || DeviceMessage.fromNearbyMessage(message).getMBody().equals(AUDIO_FINISH_MESSAGE)){
+                    Log.i(FullscreenActivity.TAG,"Got finish message")
+                    unpublish()
+                }
+                // Called when a new message is found.
+
+                /* mNearbyDevicesArrayAdapter!!.add(
+                         DeviceMessage.fromNearbyMessage(message).getMBody())
+
+                 */
+            }
+        }
         buildGoogleApiClient()
 
 
@@ -134,6 +155,7 @@ class EventGenerator : FragmentActivity(), GoogleApiClient.ConnectionCallbacks, 
                     override fun onResult( status: Status) {
                         if (status.isSuccess()) {
                             Log.i(TAG, "Subscribed successfully.")
+
                         } else {
                             logAndShowSnackbar("Could not subscribe, status = $status")
                             //mSubscribeSwitch!!.setChecked(false)
